@@ -1,6 +1,6 @@
 {
-  "versionCode":200,
-  "version": "2.0.0",
-  "zipUrl": "https://github.com/linjoin/TaskMild_donation/releases/download/v2.0.0/TaskMild-v2.0.zip",
+  "versionCode":730,
+  "version": "7.3.0",
+  "zipUrl": "https://github.com/linjoin/TaskMild_donation/releases/download/20260607/TaskMild-v7.3.0-730.zip",
   "changelog": "https://raw.githubusercontent.com/linjoin/TaskMild_donation/refs/heads/main/changelog.md"
 }
