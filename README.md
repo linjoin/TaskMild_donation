@@ -375,6 +375,10 @@ grep "启动自检完成" /data/adb/taskmild/run.log
 - 🔧 持久化重试计数器 + stop_marker 安全退出
 - 🔧 PSI_PATH 常量混淆
 
+## 🙏 致谢
+
+- **嘟嘟Ski** — [Scene](https://www.coolapk.com/apk/com.omarea.vtools) 附加模块(二) v4.2.2R：TaskMild 的 Swap/ZRAM 内核调优逻辑（ZRAM 自动计算、压缩算法检测、NandSwap/SmartSwap writeback、swappiness/watermark/extra_free_kbytes 自动配置）基于此模块参考实现
+
 ## ⚖️ 许可证
 
 本作品为闭源专有软件。未经授权不得复制、修改或分发。
