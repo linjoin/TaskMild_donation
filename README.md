@@ -7,7 +7,6 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-v7.3.0-blue" alt="version">
-  <img src="https://img.shields.io/badge/rust-1.75%2B-orange" alt="rust">
   <img src="https://img.shields.io/badge/platform-Android-aosp" alt="platform">
   <img src="https://img.shields.io/badge/arch-aarch64-green" alt="arch">
   <img src="https://img.shields.io/badge/license-proprietary-red" alt="license">
@@ -39,10 +38,14 @@
 1. 下载最新版 `TaskMild-v7.x.x-xxx.zip`
 2. 在 Magisk / KernelSU / APatch 管理器中「从本地安装」
 3. 安装过程中通过**音量键**选择 Swap 配置：
-   - **第一级**: 是否启用 Swap/ZRAM？（默认: 启用）
-   - **第二级**: 仅 ZRAM 还是 ZRAM + Swap 文件？（默认: 仅 ZRAM）
-   - **第三级**（升级时）: 替换还是保留现有配置？（默认: 保留）
+   - **第一级**: 是否启用 Swap/ZRAM？（15秒超时，默认: 启用）
+   - **第二级**: 仅 ZRAM 还是 ZRAM + Swap 文件？（15秒超时，默认: 仅 ZRAM）
+   - **第三级**（升级时）: 替换还是保留现有配置？（15秒超时，默认: 保留）
 4. **重启设备**生效
+
+### 卸载
+
+在 Magisk / KernelSU / APatch 管理器中移除模块，重启即可。模块会自动清理临时文件，保留用户配置和日志。
 
 ## 🔧 快速配置
 
@@ -148,174 +151,30 @@ kill -HUP $(cat /data/adb/taskmild/bin/taskmild.pid)
 
 Swap 核心配置（ZRAM 大小/算法/写回等）变更需**重启设备**生效。
 
-## 🏗️ 项目结构
+### 变更分类
 
-```
-TaskMild/
-├── rust_src/                    # Rust 守护进程源码
-│   ├── src/
-│   │   ├── main.rs              # 入口 & CLI 解析
-│   │   ├── auth.rs              # Ed25519 签名验证
-│   │   ├── killer.rs            # 进程扫描 & 压制执行
-│   │   ├── funnel.rs            # 八维评分算法
-│   │   ├── events.rs            # epoll 事件循环
-│   │   ├── swap.rs              # ZRAM/Swap 配置
-│   │   ├── logger.rs            # 日志系统
-│   │   ├── state.rs             # 全局状态 & 配置
-│   │   ├── runtime.rs           # 运行时工具
-│   │   ├── commands.rs          # CLI 子命令
-│   │   └── common.rs            # 公共宏
-│   ├── Cargo.toml
-│   └── .cargo/config.toml       # 交叉编译配置
-│
-├── module_src/                  # Magisk 模块文件
-│   ├── payload/
-│   │   ├── taskmild             # 编译后的二进制
-│   │   └── taskmild.conf        # 配置文件模板
-│   ├── scripts/                 # 辅助脚本
-│   │   ├── tools.sh             # 工具函数
-│   │   ├── tools.nandswap.sh    # NandSwap 管理
-│   │   ├── tools.romupdate.sh   # OPPO romupdate
-│   │   ├── tools.startup.sh     # 启动工具
-│   │   ├── tools.daemon.sh      # 守护进程工具
-│   │   ├── tools.install.sh     # 安装工具
-│   │   ├── startup.sh           # Swap 启动脚本
-│   │   └── extra.sh             # CGroup 配置
-│   ├── specific/                # OEM 特定调优
-│   │   ├── oppo/
-│   │   ├── xiaomi/
-│   │   └── qualcomm/
-│   ├── athena/                  # OPPO Athena XML
-│   ├── osense/                  # OPPO Osense XML
-│   ├── customize.sh             # 安装交互脚本
-│   ├── service.sh               # 开机服务 & 看门狗
-│   ├── post-fs-data.sh          # 开机前挂载
-│   ├── action.sh                # 模块操作
-│   ├── uninstall.sh             # 卸载清理
-│   ├── module.prop              # 模块元数据
-│   ├── system.prop              # 系统属性
-│   ├── system.mi.prop           # 小米属性
-│   ├── system.oplus.prop        # OPPO 属性
-│   ├── system.qti.prop          # Qualcomm 属性
-│   └── META-INF/                # Magisk 刷入脚本
-│
-├── pack.sh                      # 编译 & 打包脚本
-└── keys/                        # Ed25519 密钥对
-    ├── ed25519_public.b64       # 公钥 (Base64)
-    └── ed25519_private.b64      # 私钥 (Base64)
-```
+| 配置项 | 热重载 | 需重启 |
+|--------|:------:|:------:|
+| swappiness / watermark / extra_free_kbytes | ✅ | |
+| 白名单 / 黑名单 / Grain压制 | ✅ | |
+| 信号强度 / 基础阈值 / 冷却期 | ✅ | |
+| 进程压制时间 | ✅ | |
+| swap_enable / zram / zram_size | | ✅ |
+| comp_algorithm / zram_writeback | | ✅ |
+| swap / swap_size / swap_priority | | ✅ |
 
-## 🔨 编译
+## 📁 模块文件
 
-### 环境要求
+安装后文件布局：
 
-- Rust 1.75+ (推荐 stable)
-- aarch64-unknown-linux-musl 目标
-- Android NDK 或 Alpine proot (交叉编译)
-
-### 一键编译打包
-
-```bash
-# 在 Termux 中运行 (推荐)
-bash pack.sh
-```
-
-`pack.sh` 会自动完成：
-1. 同步 Cargo.toml 版本号
-2. 注入公钥到 auth.rs
-3. proot-distro Alpine 环境交叉编译
-4. 打包 Magisk 模块 zip
-5. 创建源码备份 tar.gz
-
-### 手动编译
-
-```bash
-cd rust_src
-rustup target add aarch64-unknown-linux-musl
-
-RUSTFLAGS="-C target-feature=+crt-static -C strip=symbols -C opt-level=3 -C link-arg=-s" \
-cargo build --release --target aarch64-unknown-linux-musl
-
-# 产物: target/aarch64-unknown-linux-musl/release/taskmild
-```
-
-## 🧠 技术架构
-
-### 事件驱动模型
-
-```
-                    ┌─────────────┐
-                    │  epoll 主循环 │
-                    └──────┬──────┘
-           ┌───────────┬───┴───┬───────────┐
-           ▼           ▼       ▼           ▼
-     ┌──────────┐ ┌────────┐ ┌────────┐ ┌──────────┐
-     │  Timer   │ │ Screen │ │  FG    │ │   PSI    │
-     │ (自适应) │ │ (3路)  │ │ (3路)  │ │ (epoll/  │
-     │          │ │        │ │        │ │  轮询)   │
-     └────┬─────┘ └───┬────┘ └───┬────┘ └────┬─────┘
-          │           │          │            │
-          ▼           ▼          ▼            ▼
-     ┌──────────────────────────────────────────┐
-     │           进程压制引擎                     │
-     │  ┌────────┐ ┌────────┐ ┌───────────┐    │
-     │  │ 八维评分 │ │ 动态阈值 │ │ 四级保护   │    │
-     │  └────────┘ └────────┘ └───────────┘    │
-     └──────────────────────────────────────────┘
-```
-
-### 屏幕状态检测 (3路冗余)
-
-1. **Netlink** — 内核 uevent (FB_BLANK)
-2. **Inotify** — sysfs 路径监控 (bl_power / fb_blank / drm_dpms)
-3. **Timer** — 定时 /proc 验证兜底
-
-### 前台应用检测 (3路冗余)
-
-1. **cgroup inotify** — top-app / foreground cgroup 变更
-2. **logcat watcher** — ActivityManager 事件流
-3. **/proc scan** — 定时 oom_score_adj 扫描
-
-### 守护进程看门狗
-
-```
-service.sh (监控进程)
-  │
-  ├── 检测 stop_marker → 安全退出
-  ├── 检测进程退出 → 指数退避重启 (5s→10s→20s→...→300s)
-  ├── 崩溃计数 → 每日 50 次报警
-  ├── 连续失败 10 次 → 最大退避
-  └── 认证耗尽 9 次 → 写入 stop_marker 停止
-```
-
-### v73 八维评分
-
-| 维度 | 权重 | 来源 |
-|------|------|------|
-| OOM 调整值 | ★★★ | `/proc/<pid>/oom_score_adj` |
-| RSS 内存 | ★★★ | `/proc/<pid>/status` → VmRSS |
-| PSS 内存 | ★★☆ | `/proc/<pid>/smaps_rollup` |
-| CPU 使用率 | ★★☆ | `/proc/<pid>/stat` |
-| IO 活动度 | ★★☆ | `/proc/<pid>/io` |
-| 冻结状态 | ★☆☆ | `/proc/<pid>/status` → State |
-| 后台年龄 | ★☆☆ | FgExitTracker |
-| 僵尸时间 | ★☆☆ | 进程运行时长 |
-
-**动态阈值**: `实际阈值 = 基础阈值 × K(内存可用量) × 压力系数(PSI)`
-
-**主进程四级保护**:
-
-```
-                    ┌────────────────────┐
-  评分 < 阈值×1.5  │  保护: 不杀         │
-                    ├────────────────────┤
-  评分 < 阈值×2.0  │  温和: SIGTERM      │
-                    ├────────────────────┤
-  评分 < 阈值×3.0  │  警告: SIGTERM ×1.2 │
-                    ├────────────────────┤
-  评分 ≥ 阈值×3.0  │  危险: SIGKILL ×1.5 │
-                    └────────────────────┘
-```
+| 路径 | 说明 |
+|------|------|
+| `/data/adb/taskmild/bin/taskmild` | 守护进程二进制 |
+| `/data/adb/taskmild/taskmild.conf` | 配置文件 |
+| `/data/adb/taskmild/run.log` | 运行日志 |
+| `/data/adb/taskmild/bin/taskmild.pid` | PID 文件 |
+| `/data/adb/modules/taskmild/` | Magisk 模块目录 |
+| `/data/swapfile` | Swap 文件（若启用） |
 
 ## 📄 日志
 
@@ -330,7 +189,7 @@ tail -f /data/adb/taskmild/run.log
 grep "启动自检完成" /data/adb/taskmild/run.log
 ```
 
-日志格式 (与 Rust 守护进程一致):
+日志格式:
 ```
 [2026-06-07 09:12:21.086] [信息] TaskMild v7.3.0 启动
 [2026-06-07 09:12:21.150] [信息] 启动自检完成: 8/8 子系统正常
@@ -373,7 +232,6 @@ grep "启动自检完成" /data/adb/taskmild/run.log
 - 🔧 obfstr 编译期字符串混淆
 - 🔧 MountGuard RAII 绑定挂载清理
 - 🔧 持久化重试计数器 + stop_marker 安全退出
-- 🔧 PSI_PATH 常量混淆
 
 ## 🙏 致谢
 
