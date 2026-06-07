@@ -1,395 +1,386 @@
+# TaskMild
 
-# TaskMild 捐赠版操作文档
+<p align="center">
+  <strong>Rust 原生 Android 内存管理器</strong><br>
+  智能进程压制 · ZRAM/Swap 调优 · PSI 压力感知
+</p>
 
-## 1. 简介
-
-TaskMild 捐赠版是基于公益版继续增强的版本。
-
-捐赠版当前定位：
-
-- 继续沿用公益版的安装路径、工作目录和配置路径
-- 主程序使用 Rust 实现
-- 增加授权验证
-- 在保留前台、主进程、系统应用、白名单保护的前提下，提供更明显的后台处理效果
-- 配置比公益版更灵活，但仍尽量保持简洁
-
-捐赠版与公益版的关系：
-
-- 两者**不允许并存**
-- 捐赠版安装后会直接沿用原有工作目录和配置
-- 用户从公益版切换到捐赠版时，不需要重新设置路径和基础文件
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v7.3.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/rust-1.75%2B-orange" alt="rust">
+  <img src="https://img.shields.io/badge/platform-Android-aosp" alt="platform">
+  <img src="https://img.shields.io/badge/arch-aarch64-green" alt="arch">
+  <img src="https://img.shields.io/badge/license-proprietary-red" alt="license">
+</p>
 
 ---
 
-## 2. 目录结构
+## ✨ 特性
 
-### 模块目录
+- 🦀 **Rust 原生** — 静态编译，零 GC 停顿，1.3MB 二进制，极低运行开销
+- 🧠 **v73 八维评分** — OOM / RSS / PSS / CPU / IO / 冻结 / 年龄 / 僵尸 八维度综合评分
+- 📡 **纯事件驱动** — cgroup inotify + logcat watcher + PSI epoll，零轮询
+- 🔒 **安全加固** — Ed25519 签名验证、obfstr 编译期字符串混淆、sysctl 权限锁定
+- 🔄 **热重载** — VM 参数 (swappiness / watermark / extra_free_kbytes) 即时生效
+- 🏭 **OEM 适配** — 自动检测 OPPO (NandSwap/Athena/Osense)、小米 (8Gen1 LMK)、Qualcomm (Kona) 并应用针对性优化
+- 🛡️ **健壮守护** — 指数退避重启、崩溃熔断、stop_marker 安全退出
 
-```text
-/data/adb/modules/taskmild/
-  module.prop
-  service.sh
-  action.sh
-  uninstall.sh
-```
+## 📋 要求
 
-### 工作目录
+| 项目 | 最低版本 |
+|------|---------|
+| Android | 8.0 (API 26) |
+| 内核 | 4.4+ |
+| Root | Magisk / KernelSU / APatch |
+| 架构 | aarch64 (arm64-v8a) |
 
-```text
-/data/adb/taskmild/
-  taskmild.conf
-  run.log
-  auth/
-    Unique_identifier
-    Unique_identifier.sig
-  bin/
-    taskmild
-    taskmild.pid
-```
+## 📦 安装
 
----
+1. 下载最新版 `TaskMild-v7.x.x-xxx.zip`
+2. 在 Magisk / KernelSU / APatch 管理器中「从本地安装」
+3. 安装过程中通过**音量键**选择 Swap 配置：
+   - **第一级**: 是否启用 Swap/ZRAM？（默认: 启用）
+   - **第二级**: 仅 ZRAM 还是 ZRAM + Swap 文件？（默认: 仅 ZRAM）
+   - **第三级**（升级时）: 替换还是保留现有配置？（默认: 保留）
+4. **重启设备**生效
 
-## 3. 重要文件说明
+## 🔧 快速配置
 
-### 主程序
+配置文件: `/data/adb/taskmild/taskmild.conf`
 
-```text
-/data/adb/taskmild/bin/taskmild
-```
-
-### 配置文件
-
-```text
-/data/adb/taskmild/taskmild.conf
-```
-
-### 日志文件
-
-```text
-/data/adb/taskmild/run.log
-```
-
-### 授权缓存
-
-```text
-/data/adb/taskmild/auth/Unique_identifier
-/data/adb/taskmild/auth/Unique_identifier.sig
-```
-
-### 模块信息
-
-```text
-/data/adb/modules/taskmild/module.prop
-```
-
----
-
-## 4. 授权机制说明
-
-捐赠版带授权验证，公益版不带。
-
-### 验证触发时机
-
-当前仅在以下命令前做授权验证：
-
-- `run`
-- `once`
-
-以下命令不做授权验证：
-
-- `status`
-- `stop`
-- `disable`
-- `log`
-
-### 验证逻辑
-
-1. 读取设备标识：
-   - `getprop ro.serialno`
-2. 优先读取本地授权缓存：
-   - `Unique_identifier`
-   - `Unique_identifier.sig`
-3. 用程序内置公钥对本地缓存做签名校验
-4. 校验当前设备标识是否在授权列表中
-5. 本地缓存无效或不存在时，再联网从 Gitee 下载新的授权列表和签名
-6. 下载成功并校验通过后，覆盖本地授权缓存
-7. 验证失败时拒绝启动捐赠版主功能
-
-### 授权失败时
-
-会更新：
-
-```text
-/data/adb/modules/taskmild/module.prop
-```
-
-中的 `description` 字段，显示例如：
-
-- `未授权设备`
-- `联网验证失败`
-- `授权签名无效`
-- `设备标识获取失败`
-
-### 授权文件格式
-
-#### `Unique_identifier`
-纯文本，一行一个设备 ID，例如：
-
-```text
-ABC123456789
-DEF987654321
-1234567890ABCDEF
-```
-
-#### `Unique_identifier.sig`
-对 `Unique_identifier` 原始内容做签名后的 Base64 文本。
-
----
-
-## 5. 配置文件完整示例
+### 推荐默认配置（开箱即用）
 
 ```ini
-# 模块总开关
-enable=1
+# === Swap / ZRAM ===
+swap_enable=on          # 总开关
+zram=true               # 重新配置 ZRAM
+zram_size=auto          # 自动计算大小
+comp_algorithm=auto     # 自动选择压缩算法
+zram_writeback=false    # 不启用写回
+swap=false              # 不创建 swap 文件
+swappiness=auto         # 自动设置
 
-# 进程压制总开关
-# on=开启
-# off=关闭
-进程压制=on
+# === 进程管理 ===
+enable=1                # 启用进程管理
+进程压制=on              # 启用压制
+进程压制方式=1           # 始终压制（推荐）
+进程压制时间=60          # 60秒检查间隔
+信号强度=2              # 智能信号策略
+基础阈值=60             # 动态阈值基准
 
-# 进程压制方式
-# 0=只在熄屏且后台时处理
-# 1=只要后台就处理
-进程压制方式=1
-
-# 进程压制周期（秒）
-进程压制时间=15
-
-# 深度压制
-# 0=关闭
-# 1=模式1，较激进
-# 2=模式2，更激进
-深度压制=2
-
-# 白名单
-# 支持包名和完整进程名
-# 多个项目使用英文逗号分隔
-白名单=com.tencent.mobileqq:MSF,com.tencent.mm:push,com.tencent.mobileqq,com.tencent.mm,com.tencent.tim,com.tencent.tim:MSF
-
-# Grain压制
-# 建议只填写包名
-# 多个项目使用英文逗号分隔
-Grain压制=
-
-# 日志级别
-# debug=调试
-# info=信息
-# warn=警告
-# error=错误
-log_level=info
+# 白名单: 这些进程永不压制
+白名单=com.tencent.mobileqq:MSF,com.tencent.mobileqq:peak,com.tencent.mm:push
 ```
 
----
+### 场景速查
 
-## 6. 配置项说明
+| 场景 | 关键修改 |
+|------|---------|
+| 🎮 游戏/性能优先 | `进程压制时间=30`, `基础阈值=40` |
+| 🔋 保守/省电 | `进程压制方式=0`, `基础阈值=80`, `进程压制时间=120` |
+| 💾 仅 ZRAM 不压制 | `enable=0`, `swap_enable=on`, `zram=true` |
+| 📱 大内存 + Swap | `swap=true`, `swap_size=8192` |
+| 🟢 OPPO 设备 | `zram_writeback=true` (NandSwap) |
 
-### enable
+> 📖 完整配置说明请参阅 [用户操作手册](./TaskMild-v7.3.0-用户操作手册.md)
 
-模块总开关。
+## ⚙️ 配置项一览
 
-- `1` 为开启
-- `0` 为关闭
+### Swap / ZRAM
 
----
+| 配置项 | 可选值 | 默认 | 说明 |
+|--------|--------|------|------|
+| `swap_enable` | on / off | on | Swap 总开关 |
+| `zram` | true / false | true | 是否重配 ZRAM |
+| `zram_size` | auto / 数值(MB) | auto | ZRAM 大小 |
+| `comp_algorithm` | auto / lz4 / zstd / lzo-rle / lzo | auto | 压缩算法 |
+| `zram_writeback` | true / false / default | false | 写回策略 |
+| `swap` | true / false | false | 额外 swap 文件 |
+| `swap_size` | 数值(MB) | 空 | swap 文件大小 |
+| `swap_priority` | -1 / 正整数 | -1 | swap 优先级 |
+| `swappiness` | auto / 0-200 | auto | 内核换出积极度 |
+| `extra_free_kbytes` | 数值(KB) | 空 | 额外保留内存 |
+| `watermark_scale_factor` | 数值 | 空 | 水印缩放因子 |
 
-### 进程压制
+### 进程管理
 
-进程压制功能总开关。
+| 配置项 | 可选值 | 默认 | 说明 |
+|--------|--------|------|------|
+| `enable` | 1 / 0 | 1 | 进程管理总开关 |
+| `进程压制` | on / off | on | 压制开关 |
+| `进程压制方式` | 0 / 1 | 1 | 0=仅灭屏 1=始终 |
+| `进程压制时间` | 10-300(秒) | 60 | 检查间隔 |
+| `白名单` | 逗号分隔 | (见上方) | 完全保护 |
+| `黑名单` | 逗号分隔 | 空 | 强制评分 |
+| `Grain压制` | 逗号分隔 | 空 | 后台即杀 |
 
-- `on` 为启用
-- `off` 为关闭
+### 信号与阈值
 
-当关闭时，捐赠版主程序仍可运行，但不执行进程压制逻辑。
+| 配置项 | 可选值 | 默认 | 说明 |
+|--------|--------|------|------|
+| `信号强度` | 1 / 2 / 3 | 2 | 1=全TERM 2=智能 3=全KILL |
+| `基础阈值` | 数值 | 60 | 动态阈值基准 |
+| `单轮最大压制` | 0 / 正整数 | 0 | 0=不限 |
+| `后台宽限期` | 秒 | 15 | 前台切换保护 |
+| `冷却期` | 秒 | 120 | 压制后冷却 |
 
----
+### 高级
 
-### 进程压制方式
+| 配置项 | 可选值 | 默认 | 说明 |
+|--------|--------|------|------|
+| `墓碑跳过选项` | 0 / 1 / 2 | 0 | 冻结进程处理 |
+| `系统应用压制强度` | 0 / 1 / 2 | 0 | 0=完全保护 |
+| `算法版本` | 72 / 73 | 73 | 评分算法版本 |
+| `log_level` | debug / info / warn / error | info | 日志级别 |
+| `log_max_size` | 字节数 | 1048576 | 日志最大 1MB |
 
-控制在哪些场景下对后台进程进行处理。
+## 🔄 热重载
 
-#### `0`
-- 只在**熄屏且应用处于后台**时处理
+修改配置后，进程管理参数和 VM 参数**即时生效**，无需重启：
 
-#### `1`
-- 只要应用处于后台就处理
-- 不区分当前是否熄屏
-- 推荐使用这个模式
+```bash
+# 修改配置
+vi /data/adb/taskmild/taskmild.conf
 
----
-
-### 进程压制时间
-
-表示处理周期，单位为秒。
-
-例如：
-
-```ini
-进程压制时间=15
+# 或手动触发重载
+kill -HUP $(cat /data/adb/taskmild/bin/taskmild.pid)
 ```
 
-表示每隔 15 秒做一次处理判断。
+Swap 核心配置（ZRAM 大小/算法/写回等）变更需**重启设备**生效。
 
----
+## 🏗️ 项目结构
 
-### 深度压制
-
-控制处理力度。
-
-#### `0`
-- 关闭深度压制
-- 只走普通逻辑
-
-#### `1`
-- 启用模式 1
-- 比普通逻辑更激进
-
-#### `2`
-- 启用模式 2
-- 比模式 1 更早、更强地处理后台目标
-
----
-
-### 白名单
-
-白名单优先级最高。
-
-支持两种写法：
-
-- 包名
-- 完整进程名
-
-例如：
-
-```ini
-白名单=com.tencent.mobileqq:MSF,com.tencent.mm
+```
+TaskMild/
+├── rust_src/                    # Rust 守护进程源码
+│   ├── src/
+│   │   ├── main.rs              # 入口 & CLI 解析
+│   │   ├── auth.rs              # Ed25519 签名验证
+│   │   ├── killer.rs            # 进程扫描 & 压制执行
+│   │   ├── funnel.rs            # 八维评分算法
+│   │   ├── events.rs            # epoll 事件循环
+│   │   ├── swap.rs              # ZRAM/Swap 配置
+│   │   ├── logger.rs            # 日志系统
+│   │   ├── state.rs             # 全局状态 & 配置
+│   │   ├── runtime.rs           # 运行时工具
+│   │   ├── commands.rs          # CLI 子命令
+│   │   └── common.rs            # 公共宏
+│   ├── Cargo.toml
+│   └── .cargo/config.toml       # 交叉编译配置
+│
+├── module_src/                  # Magisk 模块文件
+│   ├── payload/
+│   │   ├── taskmild             # 编译后的二进制
+│   │   └── taskmild.conf        # 配置文件模板
+│   ├── scripts/                 # 辅助脚本
+│   │   ├── tools.sh             # 工具函数
+│   │   ├── tools.nandswap.sh    # NandSwap 管理
+│   │   ├── tools.romupdate.sh   # OPPO romupdate
+│   │   ├── tools.startup.sh     # 启动工具
+│   │   ├── tools.daemon.sh      # 守护进程工具
+│   │   ├── tools.install.sh     # 安装工具
+│   │   ├── startup.sh           # Swap 启动脚本
+│   │   └── extra.sh             # CGroup 配置
+│   ├── specific/                # OEM 特定调优
+│   │   ├── oppo/
+│   │   ├── xiaomi/
+│   │   └── qualcomm/
+│   ├── athena/                  # OPPO Athena XML
+│   ├── osense/                  # OPPO Osense XML
+│   ├── customize.sh             # 安装交互脚本
+│   ├── service.sh               # 开机服务 & 看门狗
+│   ├── post-fs-data.sh          # 开机前挂载
+│   ├── action.sh                # 模块操作
+│   ├── uninstall.sh             # 卸载清理
+│   ├── module.prop              # 模块元数据
+│   ├── system.prop              # 系统属性
+│   ├── system.mi.prop           # 小米属性
+│   ├── system.oplus.prop        # OPPO 属性
+│   ├── system.qti.prop          # Qualcomm 属性
+│   └── META-INF/                # Magisk 刷入脚本
+│
+├── pack.sh                      # 编译 & 打包脚本
+└── keys/                        # Ed25519 密钥对
+    ├── ed25519_public.b64       # 公钥 (Base64)
+    └── ed25519_private.b64      # 私钥 (Base64)
 ```
 
-含义：
+## 🔨 编译
 
-- `com.tencent.mobileqq:MSF` 只保护这个进程
-- `com.tencent.mm` 保护整个微信包
+### 环境要求
 
-### 注意
-白名单命中后，无论普通压制、深度压制、Grain压制，都不会处理。
+- Rust 1.75+ (推荐 stable)
+- aarch64-unknown-linux-musl 目标
+- Android NDK 或 Alpine proot (交叉编译)
 
----
+### 一键编译打包
 
-### Grain压制
-
-Grain压制是捐赠版的重要增强项。
-
-作用是：
-
-- 对指定包的后台子进程使用更积极的处理逻辑
-- 用于你明确想重点处理的目标应用
-
-建议：
-
-- 只填**包名**
-- 不建议填带 `:` 的子进程名
-
-例如：
-
-```ini
-Grain压制=com.ss.android.ugc.aweme,com.xunmeng.pinduoduo
+```bash
+# 在 Termux 中运行 (推荐)
+bash pack.sh
 ```
 
----
+`pack.sh` 会自动完成：
+1. 同步 Cargo.toml 版本号
+2. 注入公钥到 auth.rs
+3. proot-distro Alpine 环境交叉编译
+4. 打包 Magisk 模块 zip
+5. 创建源码备份 tar.gz
 
-### log_level
+### 手动编译
 
-日志级别。
+```bash
+cd rust_src
+rustup target add aarch64-unknown-linux-musl
 
-可选值：
+RUSTFLAGS="-C target-feature=+crt-static -C strip=symbols -C opt-level=3 -C link-arg=-s" \
+cargo build --release --target aarch64-unknown-linux-musl
 
-- `debug`
-- `info`
-- `warn`
-- `error`
-
-建议：
-
-- 日常使用：`warn`
-- 想看实际处理效果：`info`
-- 想排查逻辑细节：`debug`
-
----
-
-## 7. 当前保护规则
-
-不管普通压制还是深度压制，以下对象都不会处理：
-
-- 白名单
-- 当前前台应用
-- 主进程
-- 系统应用
-- `top-app / foreground` 关键运行态进程
-
-### 主进程规则
-
-当前只认：
-
-- `进程名 == 包名`
-
-例如：
-
-- `com.tencent.mm` 是主进程
-- `com.tencent.mm:push` 不是主进程
-- `com.tencent.mm:main` 也不默认视为主进程
-
----
-
-## 8. 推荐配置
-
-### 省电优先版
-
-```ini
-enable=1
-进程压制=on
-进程压制方式=0
-进程压制时间=20
-深度压制=1
-白名单=com.tencent.mobileqq:MSF,com.tencent.mm:push,com.tencent.mobileqq,com.tencent.mm,com.tencent.tim,com.tencent.tim:MSF,com.xiaomi.xmsf,com.android.vending,com.google.android.webview
-Grain压制=
-log_level=warn
+# 产物: target/aarch64-unknown-linux-musl/release/taskmild
 ```
 
-适合：
+## 🧠 技术架构
 
-- 更省电
-- 更稳
-- 对系统和常用应用更保守
+### 事件驱动模型
 
----
-
-### 效果优先版
-
-```ini
-enable=1
-进程压制=on
-进程压制方式=1
-进程压制时间=15
-深度压制=2
-白名单=com.tencent.mobileqq:MSF,com.tencent.mm:push,com.tencent.mobileqq,com.tencent.mm
-Grain压制=com.ss.android.ugc.aweme,com.xunmeng.pinduoduo
-log_level=info
+```
+                    ┌─────────────┐
+                    │  epoll 主循环 │
+                    └──────┬──────┘
+           ┌───────────┬───┴───┬───────────┐
+           ▼           ▼       ▼           ▼
+     ┌──────────┐ ┌────────┐ ┌────────┐ ┌──────────┐
+     │  Timer   │ │ Screen │ │  FG    │ │   PSI    │
+     │ (自适应) │ │ (3路)  │ │ (3路)  │ │ (epoll/  │
+     │          │ │        │ │        │ │  轮询)   │
+     └────┬─────┘ └───┬────┘ └───┬────┘ └────┬─────┘
+          │           │          │            │
+          ▼           ▼          ▼            ▼
+     ┌──────────────────────────────────────────┐
+     │           进程压制引擎                     │
+     │  ┌────────┐ ┌────────┐ ┌───────────┐    │
+     │  │ 八维评分 │ │ 动态阈值 │ │ 四级保护   │    │
+     │  └────────┘ └────────┘ └───────────┘    │
+     └──────────────────────────────────────────┘
 ```
 
-适合：
+### 屏幕状态检测 (3路冗余)
 
-- 想明显看到处理效果
-- 更积极地处理后台子进程
-- 但仍保留前台、主进程、系统应用和白名单保护
+1. **Netlink** — 内核 uevent (FB_BLANK)
+2. **Inotify** — sysfs 路径监控 (bl_power / fb_blank / drm_dpms)
+3. **Timer** — 定时 /proc 验证兜底
+
+### 前台应用检测 (3路冗余)
+
+1. **cgroup inotify** — top-app / foreground cgroup 变更
+2. **logcat watcher** — ActivityManager 事件流
+3. **/proc scan** — 定时 oom_score_adj 扫描
+
+### 守护进程看门狗
+
+```
+service.sh (监控进程)
+  │
+  ├── 检测 stop_marker → 安全退出
+  ├── 检测进程退出 → 指数退避重启 (5s→10s→20s→...→300s)
+  ├── 崩溃计数 → 每日 50 次报警
+  ├── 连续失败 10 次 → 最大退避
+  └── 认证耗尽 9 次 → 写入 stop_marker 停止
+```
+
+### v73 八维评分
+
+| 维度 | 权重 | 来源 |
+|------|------|------|
+| OOM 调整值 | ★★★ | `/proc/<pid>/oom_score_adj` |
+| RSS 内存 | ★★★ | `/proc/<pid>/status` → VmRSS |
+| PSS 内存 | ★★☆ | `/proc/<pid>/smaps_rollup` |
+| CPU 使用率 | ★★☆ | `/proc/<pid>/stat` |
+| IO 活动度 | ★★☆ | `/proc/<pid>/io` |
+| 冻结状态 | ★☆☆ | `/proc/<pid>/status` → State |
+| 后台年龄 | ★☆☆ | FgExitTracker |
+| 僵尸时间 | ★☆☆ | 进程运行时长 |
+
+**动态阈值**: `实际阈值 = 基础阈值 × K(内存可用量) × 压力系数(PSI)`
+
+**主进程四级保护**:
+
+```
+                    ┌────────────────────┐
+  评分 < 阈值×1.5  │  保护: 不杀         │
+                    ├────────────────────┤
+  评分 < 阈值×2.0  │  温和: SIGTERM      │
+                    ├────────────────────┤
+  评分 < 阈值×3.0  │  警告: SIGTERM ×1.2 │
+                    ├────────────────────┤
+  评分 ≥ 阈值×3.0  │  危险: SIGKILL ×1.5 │
+                    └────────────────────┘
+```
+
+## 📄 日志
+
+```bash
+# 查看运行日志
+tail -100 /data/adb/taskmild/run.log
+
+# 实时监控
+tail -f /data/adb/taskmild/run.log
+
+# 查看启动诊断
+grep "启动自检完成" /data/adb/taskmild/run.log
+```
+
+日志格式 (与 Rust 守护进程一致):
+```
+[2026-06-07 09:12:21.086] [信息] TaskMild v7.3.0 启动
+[2026-06-07 09:12:21.150] [信息] 启动自检完成: 8/8 子系统正常
+```
+
+## 🛑 故障排除
+
+| 问题 | 解决方案 |
+|------|---------|
+| 安装后不生效 | 确认已重启设备 |
+| 消息推送延迟 | 将推送进程加入白名单 |
+| 日志显示 "ZRAM 激活失败" | 检查内核是否支持 ZRAM，或设 `zram=false` |
+| 守护进程频繁重启 | 检查 `run.log` 中的错误信息 |
+| 想临时停止 | `echo "" > /data/adb/taskmild/stop_marker` |
+| 想完全卸载 | Magisk 管理器移除模块 → 重启 |
+
+## 📊 性能
+
+| 指标 | 数值 |
+|------|------|
+| 二进制大小 | ~1.3 MB (stripped, static) |
+| 运行内存 | < 5 MB RSS |
+| CPU 开销 | 空闲时 < 0.1% |
+| 评分延迟 | < 50ms (单次全进程扫描) |
+| 前台检测 | 事件驱动，亚秒级响应 |
+
+## 📝 版本历史
+
+### v7.3.0 (730)
+
+- ✨ 八维评分算法 (v73)，替代 v72 三维评分
+- ✨ PSI 内存压力感知 (epoll 触发器 + 轮询降级)
+- ✨ 主进程四级保护机制
+- ✨ 冷却期指数递增 + ±25% 随机抖动
+- ✨ 前台退出时间追踪 (年龄评分)
+- ✨ 配置热重载 (VM 参数即时生效)
+- ✨ 安装时 Swap 交互选择
+- 🔧 移除所有 dumpsys 依赖，纯事件驱动
+- 🔧 Ed25519 签名验证 + 格式自动检测
+- 🔧 obfstr 编译期字符串混淆
+- 🔧 MountGuard RAII 绑定挂载清理
+- 🔧 持久化重试计数器 + stop_marker 安全退出
+- 🔧 PSI_PATH 常量混淆
+
+## ⚖️ 许可证
+
+本作品为闭源专有软件。未经授权不得复制、修改或分发。
 
 ---
 
+<p align="center">
+  <sub>TaskMild v7.3.0 — 让每一兆内存都被善待</sub>
+</p>
