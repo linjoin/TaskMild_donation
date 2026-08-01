@@ -1,9 +1,12 @@
-# TaskMild v20260728 更新日志
-- 优化日志输出
-- 优化进程通信机制
-- 将rust编译器提升至1.97.1版本
-- 修复mtk设备自定义背光路径读取问题
-- 清理定时格式改为cron表达式
-- 更新依赖库
-- 优化用户体验
-- 修复已知问题
+# TaskMild v2026801 更新日志
+- Fixed timing issues with the cleanup feature
+- Enhanced swap function logic
+- Optimized installation process
+- Fixed issue where action.sh wouldn't release locks
+- Fixed problem with detecting ad-free IPv6 addresses
+- Changed data validity period to one month
+- Fixed DNS loopback issues
+- Improved handling of allowlist logic
+- Removed some unnecessary configuration items from adg
+- Fixed known bugs
+- Optimized user experience
