@@ -1,12 +1,8 @@
-# TaskMild v2026801 更新日志
-- Fixed timing issues with the cleanup feature
-- Enhanced swap function logic
-- Optimized installation process
-- Fixed issue where action.sh wouldn't release locks
-- Fixed problem with detecting ad-free IPv6 addresses
-- Changed data validity period to one month
-- Fixed DNS loopback issues
-- Improved handling of allowlist logic
-- Removed some unnecessary configuration items from adg
-- Fixed known bugs
-- Optimized user experience
+# TaskMild v20260802 アップデートログ
+- いくつかの論理的なエラーを修正
+- バックアップが復元されない問題を解決
+- ログ出力を最適化
+- ウェブUIインターフェースを最適化
+- インド語のサポートを追加
+- 既知のバグを修正
+- ユーザー体験を向上させる
